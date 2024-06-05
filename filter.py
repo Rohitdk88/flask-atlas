@@ -9,7 +9,7 @@ app = Flask(__name__)
 
 # MongoDB Atlas connection using environment variable
 client = MongoClient(os.getenv('MONGO_URI'))
-db = client.recruitmentdb2
+db = client.recruitmentdb1
 
 # Set up logging
 import logging
