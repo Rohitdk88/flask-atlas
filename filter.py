@@ -9,7 +9,7 @@ app = Flask(__name__)
 
 # MongoDB Atlas connection using environment variable
 client = MongoClient(os.getenv('MONGO_URI'))
-db = client.recruitmentdb1
+db = client.recruitmentdb2
 
 # Set up logging
 import logging
@@ -159,18 +159,43 @@ def delete_mapping(mappings_id):
     else:
         return jsonify({'error': 'Mapping not found'}), 404
 
+# Helper function to get the actual tag for a given synonym
+def get_tag_for_synonym(synonym):
+    tag_doc = db.tags.find_one({"synonyms": {"$regex": f"^{synonym}$", "$options": "i"}})
+    if tag_doc:
+        return tag_doc["tag"]
+    return None
+
 # Route for filtering questions based on tags
 @app.route('/questions/filter', methods=['POST'])
 def filter_questions():
     try:
         data = request.json
-        tags = data.get('tags', [])
-        if not tags:
+        user_tags = data.get('tags', [])
+        if not user_tags:
             return jsonify({'error': 'No tags provided'}), 400
 
-        query = {'$or': [{tag: "Yes"} for tag in tags]}
-        mappings = db.mappings.find(query)
-        questions = [mapping.get('questions') for mapping in mappings if mapping.get('questions')]
+        lowercased_tags = [tag.lower() for tag in user_tags]
+        fields_to_check = set()
+
+        for tag in lowercased_tags:
+            # Check if the tag is a field in the mappings collection
+            if db.mappings.find_one({tag: {"$exists": True}}):
+                fields_to_check.add(tag)
+            else:
+                # Check if the tag is a synonym in the tags collection
+                actual_tag = get_tag_for_synonym(tag)
+                if actual_tag:
+                    fields_to_check.add(actual_tag.lower())
+
+        query = {"$or": [{field: "yes"} for field in fields_to_check]}
+
+        mappings_cursor = db.mappings.find(query)
+        questions = []
+        for doc in mappings_cursor:
+            question = doc.get("questions")
+            if question:
+                questions.append(question)
 
         if questions:
             return jsonify({'questions': questions}), 200

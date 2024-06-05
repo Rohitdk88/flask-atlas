@@ -9,7 +9,7 @@ app = Flask(__name__)
 
 # MongoDB Atlas connection using environment variable
 client = MongoClient(os.getenv('MONGO_URI'))
-db = client.recruitmentdb1
+db = client.recruitmentdb2
 
 # Set up logging
 import logging
@@ -159,23 +159,62 @@ def delete_mapping(mappings_id):
     else:
         return jsonify({'error': 'Mapping not found'}), 404
 
+# Helper function to get the actual tag for a given synonym
+def get_tag_for_synonym(synonym):
+    tag_doc = db.tags.find_one({"synonyms": {"$regex": f"^{synonym}$", "$options": "i"}})
+    if tag_doc:
+        return tag_doc["tag"]
+    return None
+
 # Route for filtering questions based on tags
 @app.route('/questions/filter', methods=['POST'])
 def filter_questions():
     try:
         data = request.json
-        tags = data.get('tags', [])
-        if not tags:
+        user_tags = data.get('tags', [])
+        if not user_tags:
             return jsonify({'error': 'No tags provided'}), 400
 
-        query = {'$or': [{tag: "Yes"} for tag in tags]}
-        mappings = db.mappings.find(query)
-        questions = [mapping.get('questions') for mapping in mappings if mapping.get('questions')]
+        lowercased_tags = [tag.lower() for tag in user_tags]
+        fields_to_check = set()
+        tag_questions_map = []
 
-        if questions:
-            return jsonify({'questions': questions}), 200
-        else:
-            return jsonify({'message': 'No questions found for the given tags'}), 404
+        for tag in lowercased_tags:
+            # Check if the tag is a field in the mappings collection
+            actual_tag = tag
+            if not db.mappings.find_one({tag: {"$exists": True}}):
+                # Check if the tag is a synonym in the tags collection
+                actual_tag = get_tag_for_synonym(tag)
+                if not actual_tag:
+                    tag_questions_map.append({
+                        "input tag": tag,
+                        "actual tag identified": None,
+                        "questions": [],
+                        "message": f'No questions found for "{tag}" tag.'
+                    })
+                    continue
+            
+            # Constructing the query
+            query = {actual_tag: "yes"}
+            mappings_cursor = db.mappings.find(query)
+            questions = [doc.get("questions") for doc in mappings_cursor if doc.get("questions")]
+
+            if questions:
+                numbered_questions = [f"{i+1}. {question}" for i, question in enumerate(questions)]
+                tag_questions_map.append({
+                    "input tag": tag,
+                    "actual tag identified": actual_tag,
+                    "questions": numbered_questions
+                })
+            else:
+                tag_questions_map.append({
+                    "input tag": tag,
+                    "actual tag identified": actual_tag,
+                    "questions": [],
+                    "message": f'No questions found for "{tag}" tag.'
+                })
+
+        return jsonify(tag_questions_map), 200
     except Exception as e:
         app.logger.error(f"Error filtering questions: {e}")
         return jsonify({'error': 'Internal Server Error'}), 500
