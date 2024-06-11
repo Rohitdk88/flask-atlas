@@ -225,5 +225,24 @@ def filter_questions():
         app.logger.error(f"Error filtering questions: {e}")
         return jsonify({'error': 'Internal Server Error'}), 500
 
+# New Route for getting questions by question_id list
+@app.route('/questions/get_questions_by_ids', methods=['POST'])
+def get_questions_by_ids():
+    try:
+        data = request.json
+        question_ids = data.get('question_ids', [])
+        if not question_ids:
+            return jsonify({'error': 'No question IDs provided'}), 400
+
+        # Fetch questions by question_id list
+        questions = list(db.questions.find({'question_id': {'$in': question_ids}}))
+        for question in questions:
+            question['_id'] = str(question['_id'])
+
+        return jsonify(questions), 200
+    except Exception as e:
+        app.logger.error(f"Error retrieving questions by IDs: {e}")
+        return jsonify({'error': 'Internal Server Error'}), 500
+
 if __name__ == '__main__':
     app.run(debug=True)
