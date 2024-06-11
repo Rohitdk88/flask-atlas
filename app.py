@@ -10,6 +10,7 @@ app = Flask(__name__)
 # MongoDB Atlas connection using environment variable
 client = MongoClient(os.getenv('MONGO_URI'))
 db = client.recruitmentdb1
+
 # Set up logging
 import logging
 logging.basicConfig(level=logging.DEBUG)
@@ -196,14 +197,20 @@ def filter_questions():
             # Constructing the query
             query = {actual_tag: "yes"}
             mappings_cursor = db.mappings.find(query)
-            questions = [doc.get("questions") for doc in mappings_cursor if doc.get("questions")]
+            questions = [
+                {"_id": str(doc.get("_id")), "question_id": doc.get("question_id"), "question": doc.get("questions")}
+                for doc in mappings_cursor if doc.get("questions")
+            ]
 
             if questions:
-                numbered_questions = [f"{i+1}. {question}" for i, question in enumerate(questions)]
+                formatted_questions = [
+                    {"number": i+1, "_id": q['_id'], "question_id": q['question_id'], "question": q['question']}
+                    for i, q in enumerate(questions)
+                ]
                 tag_questions_map.append({
                     "input tag": tag,
                     "actual tag identified": actual_tag,
-                    "questions": numbered_questions
+                    "questions": formatted_questions
                 })
             else:
                 tag_questions_map.append({
