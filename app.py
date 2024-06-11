@@ -226,16 +226,19 @@ def filter_questions():
         return jsonify({'error': 'Internal Server Error'}), 500
 
 # New Route for getting questions by question_id list
-@app.route('/questions/get_questions_by_ids', methods=['POST'])
+@app.route('/questions/multiple', methods=['GET'])
 def get_questions_by_ids():
     try:
-        data = request.json
-        question_ids = data.get('question_ids', [])
-        if not question_ids:
+        # Extract question_id values from the query parameter
+        id_list = request.args.get('question_id')
+        if not id_list:
             return jsonify({'error': 'No question IDs provided'}), 400
 
+        # Convert the comma-separated string to a list of integers
+        ids = [int(id.strip()) for id in id_list.split(',')]
+        
         # Fetch questions by question_id list
-        questions = list(db.questions.find({'question_id': {'$in': question_ids}}))
+        questions = list(db.questions.find({'question_id': {'$in': ids}}))
         for question in questions:
             question['_id'] = str(question['_id'])
 
