@@ -178,6 +178,7 @@ def filter_questions():
         lowercased_tags = [tag.lower() for tag in user_tags]
         fields_to_check = set()
         tag_questions_map = []
+        seen_question_ids = set()  # To track unique questions
 
         for tag in lowercased_tags:
             # Check if the tag is a field in the mappings collection
@@ -199,8 +200,11 @@ def filter_questions():
             mappings_cursor = db.mappings.find(query)
             questions = [
                 {"_id": str(doc.get("_id")), "question_id": doc.get("question_id"), "question": doc.get("questions")}
-                for doc in mappings_cursor if doc.get("questions")
+                for doc in mappings_cursor if doc.get("questions") and doc.get("question_id") not in seen_question_ids
             ]
+
+            # Add to seen_question_ids to avoid duplicates
+            seen_question_ids.update([q['question_id'] for q in questions])
 
             if questions:
                 formatted_questions = [
